@@ -28,7 +28,8 @@ export default defineConfig({
       fullInstall: true,
       strictMessage: false,
       include: [
-        resolve(__dirname, 'locales/**'),
+        resolve(__dirname, 'locales/zh.yml'),
+        resolve(__dirname, 'locales/en.yml'),
       ],
     }),
     AutoImport({
