@@ -1,4 +1,4 @@
-import { ArrowsShuffle } from '@vicons/tabler';
+import { Gift } from '@vicons/tabler';
 import { defineTool } from '../tool';
 import { translate } from '@/plugins/i18n.plugin';
 
@@ -8,6 +8,6 @@ export const tool = defineTool({
   description: translate('tools.lottery-tool.description'),
   keywords: ['lottery', 'random', 'draw', 'winner'],
   component: () => import('./lottery-tool.vue'),
-  icon: ArrowsShuffle,
+  icon: Gift,
   createdAt: new Date('2025-02-17'),
 });
