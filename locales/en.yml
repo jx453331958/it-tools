@@ -395,4 +395,4 @@ tools:
 
   lottery-tool:
     title: Lottery tool
-    description: A lottery tool that can input multiple candidate users and draw out a specified number of users.
+    description: A tool that allows you to draw random winners from a list of candidates.

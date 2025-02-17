@@ -1,237 +1,173 @@
 <template>
-  <div class="lottery-container">
-    <NSpace vertical size="large">
-      <!-- 标题和候选人输入 -->
-      <NCard title="设置">
-        <NSpace vertical>
-          <NInput v-model:value="title" placeholder="请输入抽奖标题" />
-          <NSpace align="center">
-            <NInput v-model:value="newCandidate" placeholder="输入候选人" @keyup.enter="addCandidate" />
-            <NButton type="primary" @click="addCandidate">添加</NButton>
-            <NPopconfirm @positive-click="clearCandidates">
-              <template #trigger>
-                <NButton>清空候选人</NButton>
-              </template>
-              确定要清空所有候选人吗？
-            </NPopconfirm>
-          </NSpace>
-          <NSpace vertical>
-            <NInput
-              v-model:value="batchCandidates"
-              type="textarea"
-              placeholder="批量添加候选人（每行一个名字）"
-              :rows="4"
+  <div class="lottery-tool">
+    <n-space vertical size="large">
+      <n-card>
+        <n-space vertical>
+          <n-form-item label="抽奖标题">
+            <n-input
+              v-model:value="title"
+              placeholder="请输入抽奖标题"
+              @update:value="service.setTitle($event)"
             />
-            <NButton type="primary" @click="addBatchCandidates">批量添加</NButton>
-          </NSpace>
-          <NSpace align="center">
-            <span>中奖人数：</span>
-            <NInputNumber v-model:value="numWinners" :min="1" :max="candidates.length" />
-          </NSpace>
-        </NSpace>
-      </NCard>
+          </n-form-item>
+          
+          <n-form-item label="中奖人数">
+            <n-input-number
+              v-model:value="winnerCount"
+              :min="1"
+              :max="candidates.length"
+              placeholder="中奖人数"
+              @update:value="service.setWinnerCount($event)"
+            />
+          </n-form-item>
 
-      <!-- 候选人列表 -->
-      <NCard title="候选人列表">
-        <NList>
-          <NListItem v-for="candidate in candidates" :key="candidate">
+          <n-space>
+            <n-button
+              type="primary"
+              :disabled="candidates.length === 0"
+              @click="handleStartStop"
+            >
+              {{ isRunning ? '停止' : '开始' }}
+            </n-button>
+            <n-button @click="service.reset()">重新开始</n-button>
+            <n-button @click="service.clearCandidates()">清空候选人</n-button>
+            <n-button
+              :disabled="results.length === 0"
+              @click="handleExport"
+            >
+              导出结果
+            </n-button>
+          </n-space>
+        </n-space>
+      </n-card>
+
+      <n-card title="参与者">
+        <template #header-extra>
+          <n-button size="small" @click="showAddModal = true">
+            添加参与者
+          </n-button>
+        </template>
+        <n-empty v-if="candidates.length === 0" description="暂无参与者" />
+        <n-space v-else wrap>
+          <n-tag
+            v-for="candidate in candidates"
+            :key="candidate"
+            :bordered="false"
+            closable
+            @close="service.removeCandidate(candidate)"
+          >
             {{ candidate }}
-            <template #suffix>
-              <NButton size="small" @click="removeCandidate(candidate)">删除</NButton>
-            </template>
-          </NListItem>
-        </NList>
-      </NCard>
+          </n-tag>
+        </n-space>
+      </n-card>
+      
+      <n-card title="当前中奖">
+        <n-empty
+          v-if="currentWinners.length === 0"
+          description="等待抽奖结果"
+        />
+        <n-space v-else wrap>
+          <n-tag
+            v-for="winner in currentWinners"
+            :key="winner"
+            type="success"
+            :bordered="false"
+          >
+            {{ winner }}
+          </n-tag>
+        </n-space>
+      </n-card>
 
-      <!-- 抽奖区域 -->
-      <NCard title="抽奖区域">
-        <NSpace vertical align="center">
-          <div class="lottery-display">
-            <h2>{{ currentCandidate || '等待开始...' }}</h2>
-          </div>
-          <NDivider />
-          <div class="winners-display">
-            <h3>本轮获奖者：</h3>
-            <NSpace>
-              <NTag v-for="winner in currentWinners" :key="winner" type="success">
+      <n-card title="历史记录">
+        <n-empty v-if="results.length === 0" description="暂无抽奖记录" />
+        <n-timeline v-else>
+          <n-timeline-item
+            v-for="(result, index) in results"
+            :key="index"
+            :title="`第${index + 1}次抽奖`"
+            :time="result.drawTime.toLocaleString()"
+          >
+            <n-space>
+              <n-tag
+                v-for="winner in result.winners"
+                :key="winner"
+                type="success"
+                :bordered="false"
+              >
                 {{ winner }}
-              </NTag>
-            </NSpace>
-          </div>
-          <NSpace>
-            <NButton type="primary" size="large" @click="startLottery" :disabled="lotteryService.isLotteryRunning()">
-              开始
-            </NButton>
-            <NButton type="warning" size="large" @click="stopLottery" :disabled="!lotteryService.isLotteryRunning()">
-              停止
-            </NButton>
-            <NButton @click="reset">重置</NButton>
-          </NSpace>
-        </NSpace>
-      </NCard>
+              </n-tag>
+            </n-space>
+          </n-timeline-item>
+        </n-timeline>
+      </n-card>
+    </n-space>
 
-      <!-- 历史记录 -->
-      <NCard title="历史记录">
-        <NSpace vertical>
-          <NList>
-            <NListItem v-for="result in results" :key="result.timestamp">
-              <NSpace vertical>
-                <strong>{{ result.title }}</strong>
-                <NSpace>
-                  <NTag v-for="winner in result.winners" :key="winner" type="success">
-                    {{ winner }}
-                  </NTag>
-                </NSpace>
-                <small>{{ new Date(result.timestamp).toLocaleString() }}</small>
-              </NSpace>
-            </NListItem>
-          </NList>
-          <NSpace justify="end">
-            <NButton @click="exportResults" :disabled="results.length === 0">导出结果</NButton>
-            <NPopconfirm @positive-click="clearResults">
-              <template #trigger>
-                <NButton :disabled="results.length === 0">清空记录</NButton>
-              </template>
-              确定要清空所有记录吗？
-            </NPopconfirm>
-          </NSpace>
-        </NSpace>
-      </NCard>
-    </NSpace>
+    <n-modal v-model:show="showAddModal" preset="dialog" title="添加参与者">
+      <n-input
+        v-model:value="newCandidates"
+        type="textarea"
+        placeholder="请输入参与者名单，每行一个"
+        :rows="10"
+      />
+      <template #action>
+        <n-button type="primary" @click="handleAddCandidates">
+          确定
+        </n-button>
+      </template>
+    </n-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { LotteryService, type LotteryResult } from './lottery-tool.service';
-import { onBeforeUnmount, ref } from 'vue';
-import { useI18n } from 'vue-i18n';
-import { NButton, NInput, NInputNumber, NSpace, NCard, NList, NListItem, NPopconfirm, NDivider, NTag } from 'naive-ui';
+import { ref, computed } from 'vue';
+import { useMessage } from 'naive-ui';
+import { lotteryToolService } from './lottery-tool.service';
 
-const { t } = useI18n();
-const lotteryService = new LotteryService();
+const service = lotteryToolService;
+const message = useMessage();
 
-const title = ref('');
-const newCandidate = ref('');
-const batchCandidates = ref('');
-const numWinners = ref(1);
-const candidates = ref<string[]>([]);
-const currentCandidate = ref('');
-const currentWinners = ref<string[]>([]);
-const results = ref<LotteryResult[]>([]);
+const title = computed(() => service.getTitle().value);
+const candidates = computed(() => service.getCandidates().value);
+const winnerCount = computed(() => service.getWinnerCount().value);
+const currentWinners = computed(() => service.getCurrentWinners().value);
+const results = computed(() => service.getResults().value);
+const isRunning = computed(() => service.isLotteryRunning().value);
 
-const addCandidate = () => {
-  if (newCandidate.value.trim()) {
-    lotteryService.addCandidate(newCandidate.value.trim());
-    candidates.value = lotteryService.getCandidates();
-    newCandidate.value = '';
-  }
-};
+const showAddModal = ref(false);
+const newCandidates = ref('');
 
-const addBatchCandidates = () => {
-  if (!batchCandidates.value.trim()) return;
-  
-  const names = batchCandidates.value
-    .split('\n')
-    .map(name => name.trim())
-    .filter(Boolean);
-  
-  lotteryService.addCandidates(names);
-  batchCandidates.value = '';
-  candidates.value = [...lotteryService.getCandidates()];
-};
-
-const removeCandidate = (name: string) => {
-  lotteryService.removeCandidate(name);
-  candidates.value = lotteryService.getCandidates();
-};
-
-const clearCandidates = () => {
-  lotteryService.clearCandidates();
-  candidates.value = [];
-  currentWinners.value = [];
-};
-
-const startLottery = () => {
-  try {
-    lotteryService.start(numWinners.value);
-    updateCurrentCandidate();
-  } catch (error) {
-    if (error instanceof Error) {
-      window.$message.error(error.message);
-    }
-  }
-};
-
-const stopLottery = () => {
-  lotteryService.stop(title.value);
-  currentWinners.value = lotteryService.getCurrentWinners();
-  
-  // 如果达到目标人数，更新结果列表
-  if (lotteryService.hasReachedTarget()) {
-    results.value = lotteryService.getResults();
+const handleStartStop = () => {
+  if (isRunning.value) {
+    service.stopLottery();
   } else {
-    // 如果还没有达到目标人数，自动开始下一轮
-    startLottery();
+    service.startLottery();
   }
 };
 
-const reset = () => {
-  lotteryService.reset();
-  currentWinners.value = [];
-  currentCandidate.value = '';  // 重置当前显示的候选人
+const handleAddCandidates = () => {
+  service.addCandidates(newCandidates.value);
+  showAddModal.value = false;
+  newCandidates.value = '';
+  message.success('添加成功');
 };
 
-const clearResults = () => {
-  lotteryService.clearResults();
-  results.value = [];
-};
-
-const updateCurrentCandidate = () => {
-  if (lotteryService.isLotteryRunning()) {
-    currentCandidate.value = lotteryService.getCurrentCandidate();
-    requestAnimationFrame(updateCurrentCandidate);
-  }
-};
-
-const exportResults = () => {
-  const resultsText = results.value.map(result => {
-    return `${result.title}\n获奖者: ${result.winners.join(', ')}\n时间: ${new Date(result.timestamp).toLocaleString()}\n`;
-  }).join('\n');
-  
-  const blob = new Blob([resultsText], { type: 'text/plain;charset=utf-8' });
+const handleExport = () => {
+  const results = service.exportResults();
+  const blob = new Blob([results], { type: 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = '抽奖结果.txt';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `抽奖结果_${new Date().toLocaleString()}.txt`;
+  link.click();
   URL.revokeObjectURL(url);
+  message.success('导出成功');
 };
-
-onBeforeUnmount(() => {
-  lotteryService.reset();
-});
 </script>
 
 <style scoped>
-.lottery-container {
-  max-width: 800px;
+.lottery-tool {
+  max-width: 1200px;
   margin: 0 auto;
   padding: 20px;
-}
-
-.lottery-display {
-  min-height: 100px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 2em;
-  margin: 20px 0;
-}
-
-.winners-display {
-  text-align: center;
-  margin: 20px 0;
 }
 </style>

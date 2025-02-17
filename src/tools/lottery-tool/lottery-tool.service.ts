@@ -1,148 +1,147 @@
 /**
  * 抽奖工具：
  * 1. 支持设置标题
- * 2. 支持增加候选人
+ * 2. 支持增加参与者
  * 3. 支持配置中奖人数
  * 4. 支持手动暂停和自动暂停
  * 5. 支持重新开始
- * 6. 支持清空候选人
+ * 6. 支持清空参与者
  * 7. 支持导出中奖结果
  * 8. 支持设置抽奖次数
- * 9. 支持批量添加候选人
+ * 9. 支持批量添加参与者
  */
+
+import { ref } from 'vue';
 
 export interface LotteryResult {
   winners: string[];
-  timestamp: number;
-  title: string;
+  drawTime: Date;
 }
 
-export class LotteryService {
-  private candidates: string[] = [];
-  private currentWinners: string[] = [];
-  private results: LotteryResult[] = [];
-  private isRunning = false;
-  private intervalId: NodeJS.Timeout | null = null;
-  private currentIndex = 0;
-  private currentCandidate: string = '';
-  private targetWinners: number = 0;
+export class LotteryToolService {
+  private title = ref<string>('');
+  private candidates = ref<string[]>([]);
+  private winnerCount = ref<number>(1);
+  private isRunning = ref<boolean>(false);
+  private currentWinners = ref<string[]>([]);
+  private results = ref<LotteryResult[]>([]);
+  private timer: NodeJS.Timer | null = null;
 
-  constructor() {}
+  setTitle(title: string) {
+    this.title.value = title;
+  }
 
-  addCandidate(name: string) {
-    const trimmedName = name.trim();
-    if (trimmedName && !this.candidates.includes(trimmedName)) {
-      this.candidates.push(trimmedName);
+  getTitle() {
+    return this.title;
+  }
+
+  addCandidate(candidate: string) {
+    if (candidate && !this.candidates.value.includes(candidate)) {
+      this.candidates.value.push(candidate);
     }
-    return this;
   }
 
-  addCandidates(names: string[]) {
-    const uniqueNames = [...new Set(names.map(name => name.trim()).filter(Boolean))];
-    const newNames = uniqueNames.filter(name => !this.candidates.includes(name));
-    this.candidates.push(...newNames);
-    return this;
+  addCandidates(candidatesText: string) {
+    const newCandidates = candidatesText
+      .split('\n')
+      .map(c => c.trim())
+      .filter(c => c && !this.candidates.value.includes(c));
+    
+    this.candidates.value.push(...newCandidates);
   }
 
-  removeCandidate(name: string) {
-    this.candidates = this.candidates.filter(c => c !== name);
+  getCandidates() {
+    return this.candidates;
   }
 
   clearCandidates() {
-    this.candidates = [];
-    this.currentWinners = [];
+    this.candidates.value = [];
+    this.currentWinners.value = [];
   }
 
-  start(numWinners: number) {
-    if (this.candidates.length < numWinners) {
-      throw new Error('Not enough candidates');
-    }
-    
-    // 设置目标获奖者数量
-    this.targetWinners = numWinners;
-    
-    if (!this.isRunning) {
-      // 只有在新一轮开始时才重置当前获奖者
-      this.currentWinners = [];
-    }
-    
-    this.isRunning = true;
-    
-    // 只从未中奖的候选人中选择
-    const availableCandidates = this.candidates.filter(c => !this.currentWinners.includes(c));
-    if (availableCandidates.length === 0) {
-      throw new Error('No available candidates');
-    }
-    
-    this.intervalId = setInterval(() => {
-      this.currentIndex = Math.floor(Math.random() * availableCandidates.length);
-      // 使用可用候选人列表来获取当前显示的候选人
-      this.currentCandidate = availableCandidates[this.currentIndex];
-    }, 50);
+  setWinnerCount(count: number) {
+    this.winnerCount.value = count;
   }
 
-  stop(title: string) {
-    if (!this.isRunning || !this.intervalId) return;
-
-    clearInterval(this.intervalId);
-    this.isRunning = false;
-    this.intervalId = null;
-
-    // 使用当前显示的候选人作为获奖者
-    if (this.currentCandidate && !this.currentWinners.includes(this.currentCandidate)) {
-      this.currentWinners.push(this.currentCandidate);
-    }
-
-    // 只有在达到目标获奖者数量时才保存结果
-    if (this.currentWinners.length >= this.targetWinners) {
-      const result: LotteryResult = {
-        winners: [...this.currentWinners],
-        timestamp: Date.now(),
-        title,
-      };
-      this.results.push(result);
-      // 重置目标获奖者数量，表示本轮已结束
-      this.targetWinners = 0;
-    }
+  getWinnerCount() {
+    return this.winnerCount;
   }
 
-  getCurrentCandidate(): string {
-    return this.currentCandidate;
+  getCurrentWinners() {
+    return this.currentWinners;
   }
 
-  getCandidates(): string[] {
-    return [...this.candidates];
+  getResults() {
+    return this.results;
   }
 
-  getCurrentWinners(): string[] {
-    return [...this.currentWinners];
-  }
-
-  getResults(): LotteryResult[] {
-    return [...this.results];
-  }
-
-  isLotteryRunning(): boolean {
+  isLotteryRunning() {
     return this.isRunning;
   }
 
-  hasReachedTarget(): boolean {
-    return this.currentWinners.length >= this.targetWinners;
+  startLottery() {
+    if (this.isRunning.value) return;
+    
+    this.isRunning.value = true;
+    this.timer = setInterval(() => {
+      this.drawRandomWinners();
+    }, 100);
+  }
+
+  stopLottery() {
+    if (!this.isRunning.value) return;
+    
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+    
+    this.isRunning.value = false;
+    this.results.value.push({
+      winners: [...this.currentWinners.value],
+      drawTime: new Date()
+    });
   }
 
   reset() {
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
-    }
-    this.isRunning = false;
-    this.intervalId = null;
-    this.currentWinners = [];
-    this.currentIndex = 0;
-    this.currentCandidate = '';
-    this.targetWinners = 0;  // 重置目标获奖者数量
+    this.currentWinners.value = [];
+    this.results.value = [];
   }
 
-  clearResults() {
-    this.results = [];
+  private drawRandomWinners() {
+    const availableCandidates = this.candidates.value.filter(
+      c => !this.currentWinners.value.includes(c)
+    );
+    
+    if (availableCandidates.length === 0) return;
+
+    this.currentWinners.value = [];
+    const shuffled = [...availableCandidates].sort(() => Math.random() - 0.5);
+    this.currentWinners.value = shuffled.slice(0, this.winnerCount.value);
+  }
+
+  exportResults(): string {
+    return this.results.value
+      .map((result, index) => {
+        const time = result.drawTime.toLocaleString();
+        const winners = result.winners.join(', ');
+        return `第${index + 1}次抽奖 (${time}):\n中奖者: ${winners}\n`;
+      })
+      .join('\n');
+  }
+
+  removeCandidate(candidate: string) {
+    const index = this.candidates.value.indexOf(candidate);
+    if (index > -1) {
+      this.candidates.value.splice(index, 1);
+      // 如果当前中奖者中包含被删除的候选人，也需要移除
+      const winnerIndex = this.currentWinners.value.indexOf(candidate);
+      if (winnerIndex > -1) {
+        this.currentWinners.value.splice(winnerIndex, 1);
+      }
+    }
   }
 }
+
+export const lotteryToolService = new LotteryToolService();
+
