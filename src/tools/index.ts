@@ -191,6 +191,10 @@ export const toolsByCategory: ToolCategory[] = [
     name: 'Data',
     components: [phoneParserAndFormatter, ibanValidatorAndParser],
   },
+  {
+    name: 'Entertainment',
+    components: [lotteryTool],
+  },
 ];
 
 export const tools = toolsByCategory.flatMap(({ components }) => components);

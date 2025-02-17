@@ -70,6 +70,7 @@ tools:
     measurement: '测量'
     text: '文本'
     data: '数据'
+    entertainment: '娱乐'
 
   password-strength-analyser:
     title: 密码强度分析仪
@@ -388,3 +389,7 @@ tools:
   text-to-binary:
     title: 文本到 ASCII 二进制
     description: 将文本转换为其 ASCII 二进制表示形式，反之亦然。
+  
+  lottery-tool:
+    title: 抽奖工具
+    description: 一个抽奖工具，可以输入多位候选用户，抽出指定数量的用户
